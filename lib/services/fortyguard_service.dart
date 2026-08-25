@@ -32,7 +32,8 @@ class FortyGuardService {
 
     final apiKey = AppConfig.fortyGuardApiKey;
     if (apiKey.isEmpty) {
-      throw FortyGuardException('API key is empty. Make sure .env is loaded correctly.');
+      throw FortyGuardException(
+          'API key is empty. Make sure .env is loaded correctly.');
     }
 
     final postUri = Uri.parse('${AppConfig.fortyGuardBaseUrl}/env_params');
@@ -59,26 +60,31 @@ class FortyGuardService {
         'date_time': {
           'filter_type': 1,
           'start_date': now.toIso8601String().split('T')[0], // YYYY-MM-DD
-          'start_time': now.toIso8601String().split('T')[1].substring(0, 5), // HH:mm
+          'start_time':
+              now.toIso8601String().split('T')[1].substring(0, 5), // HH:mm
         },
       };
       final encodedBody = jsonEncode(requestBody);
 
       // 1. Submit the async data task
-      final postResponse = await _client.post(
-        postUri,
-        headers: {
-          'api-key': apiKey,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: encodedBody,
-      ).timeout(const Duration(seconds: 15));
+      final postResponse = await _client
+          .post(
+            postUri,
+            headers: {
+              'api-key': apiKey,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: encodedBody,
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (postResponse.statusCode == 404 || postResponse.statusCode == 401) {
         // ignore: avoid_print
-        print('DEBUG: API returned ${postResponse.statusCode}. Sent body: $encodedBody. Falling back to simulation.');
-        return _simulatedReading(lat: lat, lon: lon, locationName: locationName);
+        print(
+            'DEBUG: API returned ${postResponse.statusCode}. Sent body: $encodedBody. Falling back to simulation.');
+        return _simulatedReading(
+            lat: lat, lon: lon, locationName: locationName);
       }
 
       if (postResponse.statusCode != 200 && postResponse.statusCode != 201) {
@@ -91,16 +97,22 @@ class FortyGuardService {
       }
 
       final postBody = jsonDecode(postResponse.body);
-      final activityId = (postBody['data'] != null && postBody['data'] is Map) 
-          ? postBody['data']['activity_id'] 
+      final activityId = (postBody['data'] != null && postBody['data'] is Map)
+          ? postBody['data']['activity_id']
           : postBody['activity_id'];
-          
+
       if (activityId == null) {
         // Direct response fallback
         final data = postBody['data'] ?? postBody;
-        final reading = TemperatureReading.fromJson(Map<String, dynamic>.from(data));
+        final reading = _normalizeReading(
+          TemperatureReading.fromJson(Map<String, dynamic>.from(data)),
+          lat: lat,
+          lon: lon,
+          locationName: locationName,
+        );
         if (reading.temperatureF == 0.0) {
-          return _simulatedReading(lat: lat, lon: lon, locationName: locationName);
+          return _simulatedReading(
+              lat: lat, lon: lon, locationName: locationName);
         }
         return reading;
       }
@@ -108,8 +120,9 @@ class FortyGuardService {
       // 2. Poll for completion
       for (int i = 0; i < 15; i++) {
         await Future.delayed(const Duration(seconds: 2));
-        final statusUri = Uri.parse('${AppConfig.fortyGuardBaseUrl}/status/$activityId');
-        
+        final statusUri =
+            Uri.parse('${AppConfig.fortyGuardBaseUrl}/status/$activityId');
+
         final statusResponse = await _client.get(
           statusUri,
           headers: {
@@ -120,37 +133,44 @@ class FortyGuardService {
 
         if (statusResponse.statusCode == 200) {
           final statusBody = jsonDecode(statusResponse.body);
-          final statusVal = (statusBody['data'] != null && statusBody['data'] is Map) 
-              ? (statusBody['data']['status'] ?? statusBody['status']) 
-              : statusBody['status'];
+          final statusVal =
+              (statusBody['data'] != null && statusBody['data'] is Map)
+                  ? (statusBody['data']['status'] ?? statusBody['status'])
+                  : statusBody['status'];
           final statusStr = (statusVal ?? '').toString().toLowerCase();
-          
+
           if (statusStr == 'completed') {
             final dataBlock = statusBody['data'] ?? statusBody;
             Map<String, dynamic> data = {};
-            
-            if (dataBlock['result'] != null && 
-                dataBlock['result']['locations'] != null && 
+
+            if (dataBlock['result'] != null &&
+                dataBlock['result']['locations'] != null &&
                 (dataBlock['result']['locations'] as List).isNotEmpty) {
-              data = Map<String, dynamic>.from(dataBlock['result']['locations'][0]);
-              
+              data = Map<String, dynamic>.from(
+                  dataBlock['result']['locations'][0]);
+
               // If there are parameters with arrays, we can try to extract the first value
               if (data['parameters'] != null) {
                 final params = data['parameters'] as Map<String, dynamic>;
-                if (params['temperature_celsius'] != null && (params['temperature_celsius'] as List).isNotEmpty) {
-                  data['temperature_celsius'] = params['temperature_celsius'][0];
+                if (params['temperature_celsius'] != null &&
+                    (params['temperature_celsius'] as List).isNotEmpty) {
+                  data['temperature_celsius'] =
+                      params['temperature_celsius'][0];
                 }
-                if (params['heat_index_celsius'] != null && (params['heat_index_celsius'] as List).isNotEmpty) {
+                if (params['heat_index_celsius'] != null &&
+                    (params['heat_index_celsius'] as List).isNotEmpty) {
                   data['heat_index_celsius'] = params['heat_index_celsius'][0];
                 }
-                if (params['relative_humidity_percent'] != null && (params['relative_humidity_percent'] as List).isNotEmpty) {
-                  data['relative_humidity_percent'] = params['relative_humidity_percent'][0];
+                if (params['relative_humidity_percent'] != null &&
+                    (params['relative_humidity_percent'] as List).isNotEmpty) {
+                  data['relative_humidity_percent'] =
+                      params['relative_humidity_percent'][0];
                 }
               }
             } else {
               data = Map<String, dynamic>.from(dataBlock);
             }
-            
+
             // Auto-convert known FortyGuard celsius fields to Fahrenheit
             double toF(num c) => (c * 9 / 5) + 32;
             if (data['temperature_celsius'] != null) {
@@ -159,16 +179,23 @@ class FortyGuardService {
             if (data['heat_index_celsius'] != null) {
               data['heat_index_f'] = toF(data['heat_index_celsius']);
             }
-            
-            final reading = TemperatureReading.fromJson(data);
+
+            final reading = _normalizeReading(
+              TemperatureReading.fromJson(data),
+              lat: lat,
+              lon: lon,
+              locationName: locationName,
+            );
             if (reading.temperatureF == 0.0) {
               // API successfully processed but returned empty arrays (no data for this coordinate/time).
-              return _simulatedReading(lat: lat, lon: lon, locationName: locationName);
+              return _simulatedReading(
+                  lat: lat, lon: lon, locationName: locationName);
             }
-            
+
             // Hackathon fallback: If API doesn't provide these yet, simulate them to populate the UI
             if (reading.humidityPct == null || reading.heatIndexF == null) {
-              final sim = _simulatedReading(lat: lat, lon: lon, locationName: locationName);
+              final sim = _simulatedReading(
+                  lat: lat, lon: lon, locationName: locationName);
               return TemperatureReading(
                 gridId: reading.gridId,
                 locationName: reading.locationName,
@@ -180,19 +207,50 @@ class FortyGuardService {
                 timestamp: reading.timestamp,
               );
             }
-            
+
             return reading;
           } else if (statusStr == 'failed' || statusStr == 'error') {
-            throw FortyGuardException('API job failed on server side: ${statusResponse.body}');
+            throw FortyGuardException(
+                'API job failed on server side: ${statusResponse.body}');
           }
         }
       }
 
-      throw FortyGuardException('Timed out waiting for data (activity_id: $activityId)');
+      throw FortyGuardException(
+          'Timed out waiting for data (activity_id: $activityId)');
     } catch (e) {
       print('DEBUG: Exception in API call: $e. Falling back to simulation.');
       return _simulatedReading(lat: lat, lon: lon, locationName: locationName);
     }
+  }
+
+  TemperatureReading _normalizeReading(
+    TemperatureReading reading, {
+    required double lat,
+    required double lon,
+    required String locationName,
+  }) {
+    final hasLocation = reading.locationName.trim().isNotEmpty &&
+        reading.locationName.toLowerCase() != 'unknown';
+    final hasGrid = reading.gridId.trim().isNotEmpty &&
+        reading.gridId.toLowerCase() != 'unknown-grid';
+
+    return TemperatureReading(
+      gridId: hasGrid ? reading.gridId : _gridLabel(lat, lon),
+      locationName: hasLocation ? reading.locationName : locationName,
+      latitude: reading.latitude == 0 ? lat : reading.latitude,
+      longitude: reading.longitude == 0 ? lon : reading.longitude,
+      temperatureF: reading.temperatureF,
+      heatIndexF: reading.heatIndexF,
+      humidityPct: reading.humidityPct,
+      timestamp: reading.timestamp,
+    );
+  }
+
+  String _gridLabel(double lat, double lon) {
+    final latitudeDirection = lat >= 0 ? 'N' : 'S';
+    final longitudeDirection = lon >= 0 ? 'E' : 'W';
+    return 'OHIO-${lat.abs().toStringAsFixed(2)}$latitudeDirection-${lon.abs().toStringAsFixed(2)}$longitudeDirection';
   }
 
   /// Simulated reading generator for offline demoing. Slowly drifts and
@@ -216,7 +274,8 @@ class FortyGuardService {
       longitude: lon,
       temperatureF: double.parse(_lastSimTemp.toStringAsFixed(1)),
       heatIndexF: double.parse((_lastSimTemp + 4).toStringAsFixed(1)),
-      humidityPct: double.parse((45 + _rand.nextDouble() * 20).toStringAsFixed(0)),
+      humidityPct:
+          double.parse((45 + _rand.nextDouble() * 20).toStringAsFixed(0)),
       timestamp: DateTime.now(),
     );
   }
