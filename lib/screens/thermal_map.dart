@@ -81,6 +81,43 @@ class _MapPainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
     for (var y = 0.0; y <= size.height; y += 28)
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    final region = Path()
+      ..moveTo(center.dx - radius * .62, center.dy - radius * .72)
+      ..lineTo(center.dx + radius * .18, center.dy - radius * .76)
+      ..lineTo(center.dx + radius * .55, center.dy - radius * .42)
+      ..lineTo(center.dx + radius * .48, center.dy + radius * .05)
+      ..lineTo(center.dx + radius * .72, center.dy + radius * .48)
+      ..lineTo(center.dx + radius * .18, center.dy + radius * .7)
+      ..lineTo(center.dx - radius * .28, center.dy + radius * .5)
+      ..lineTo(center.dx - radius * .7, center.dy + radius * .3)
+      ..lineTo(center.dx - radius * .58, center.dy - radius * .18)
+      ..close();
+    canvas.drawPath(
+        region, Paint()..color = const Color(0xFF113044).withOpacity(.48));
+    canvas.drawPath(
+        region,
+        Paint()
+          ..color = const Color(0xFF28D7F2).withOpacity(.48)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4);
+    for (final zone in [
+      (Offset(-.25, -.25), .2, const Color(0xFFE6B84A)),
+      (Offset(.28, .08), .24, const Color(0xFFFF8A3D)),
+      (Offset(.05, .4), .16, const Color(0xFFFF4D5E)),
+    ]) {
+      final zoneCenter =
+          center + Offset(zone.$1.dx * radius, zone.$1.dy * radius);
+      canvas.drawCircle(
+          zoneCenter,
+          radius * zone.$2,
+          Paint()
+            ..shader = RadialGradient(colors: [
+              zone.$3.withOpacity(.62),
+              zone.$3.withOpacity(.04),
+              Colors.transparent
+            ]).createShader(
+                Rect.fromCircle(center: zoneCenter, radius: radius * zone.$2)));
+    }
     final rings = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2
@@ -138,6 +175,18 @@ class _MapPainter extends CustomPainter {
           ..color = severityColor.withOpacity(.25)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2);
+    final label = TextPainter(
+        text: const TextSpan(
+            text: 'OHIO GRID',
+            style: TextStyle(
+                color: Color(0xFF28D7F2),
+                fontSize: 10,
+                letterSpacing: 2,
+                fontWeight: FontWeight.w700)),
+        textDirection: TextDirection.ltr)
+      ..layout();
+    label.paint(
+        canvas, Offset(center.dx - radius * .52, center.dy + radius * .78));
   }
 
   @override

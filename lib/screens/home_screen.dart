@@ -9,6 +9,7 @@ import '../services/ai_insights_service.dart';
 import '../widgets/alert_history_card.dart';
 import '../widgets/temperature_trend_chart.dart';
 import '../widgets/ai_insights_panel.dart';
+import '../widgets/dashboard_visuals.dart';
 import 'thermal_map.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -292,14 +293,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildDashboard() {
     final reading = _latestReading;
-    final panel = (Widget child, {Color? accent}) => Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0B1420),
-            border:
-                Border.all(color: (accent ?? Colors.white).withOpacity(.13)),
-          ),
+    final panel = (Widget child, {Color? accent}) => DashboardPanel(
           child: child,
+          accent: accent ?? const Color(0xFF28D7F2),
         );
     TextStyle mono(
             {double size = 12,
@@ -495,6 +491,18 @@ class _HomeScreenState extends State<HomeScreen> {
             signal('UV-LIKE', .78, '10 SIM', const Color(0xFFE6B84A))
           ])),
           const SizedBox(height: 12),
+          panel(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('LOAD PROFILE / SIMULATED',
+                style: mono(size: 9, color: Colors.white60, spacing: 1)),
+            const SizedBox(height: 8),
+            const MiniBars(color: Color(0xFFFF8A3D)),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Text('0600', style: mono(size: 8, color: Colors.white38)),
+              Text('1200', style: mono(size: 8, color: Colors.white38)),
+              Text('1800', style: mono(size: 8, color: Colors.white38)),
+            ])
+          ])),
+          const SizedBox(height: 12),
           if (_monitor.readingHistory.isNotEmpty)
             TemperatureTrendChart(history: _monitor.readingHistory)
         ]);
@@ -503,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
           label('THERMAL MAP', Icons.radar),
           const SizedBox(height: 8),
           SizedBox(
-              height: 480,
+              height: 520,
               child: panel(
                   ThermalMap(
                       reading: reading,
@@ -521,11 +529,55 @@ class _HomeScreenState extends State<HomeScreen> {
                     '${AppConfig.targetLocationName.toUpperCase()} GRID / ${reading?.gridId ?? 'AWAITING SIGNAL'}',
                     style:
                         mono(size: 10, weight: FontWeight.w700, spacing: 1))),
-            Text('CHECK NOW',
+            StatusChip(_checking ? 'SCANNING' : 'CHECK NOW',
+                color: const Color(0xFFE6B84A))
+          ])),
+          const SizedBox(height: 10),
+          panel(Row(children: [
+            Text('TIMELINE',
                 style: mono(
                     size: 9,
-                    color: const Color(0xFFE6B84A),
-                    weight: FontWeight.w700))
+                    color: Colors.white60,
+                    weight: FontWeight.w700,
+                    spacing: 1.2)),
+            const SizedBox(width: 10),
+            const Expanded(child: MiniLineChart()),
+            const SizedBox(width: 10),
+            Text('12:00:00Z', style: mono(size: 8, color: Colors.white54)),
+          ])),
+          const SizedBox(height: 10),
+          panel(Row(children: [
+            const MiniGauge(value: .72, color: Color(0xFFFF8A3D)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('SENSOR ARRAY',
+                      style: mono(
+                          size: 10,
+                          color: Colors.white70,
+                          weight: FontWeight.w800,
+                          spacing: 1.3)),
+                  const SizedBox(height: 6),
+                  Text('MULTI-POINT THERMAL FIELD',
+                      style: mono(size: 8, color: Colors.white54)),
+                  const SizedBox(height: 7),
+                  Row(children: [
+                    const SignalBars(active: 4),
+                    const SizedBox(width: 8),
+                    Text('04 / 05 ONLINE',
+                        style: mono(size: 8, color: const Color(0xFF28D7F2)))
+                  ])
+                ])),
+          ])),
+          const SizedBox(height: 10),
+          panel(
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            StatusChip(_severity.label.toUpperCase(), color: _severityColor),
+            const StatusChip('SIMULATED', color: Color(0xFFE6B84A)),
+            Text('NORMAL  /  WATCH  /  WARNING',
+                style: mono(size: 7, color: Colors.white54, spacing: .4)),
           ]))
         ]);
     return Scaffold(
